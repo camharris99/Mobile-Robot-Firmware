@@ -28,16 +28,17 @@
 #define MAX_TURN_VEL 2.5 // max turning speed (rad/s)
 
 // TODO: Enter the polarity values for your motors and encoders
-#define LEFT_ENC_POL 1
-#define RIGHT_ENC_POL -1
-#define LEFT_MOTOR_POL -1
-#define RIGHT_MOTOR_POL -1
+#define LEFT_ENC_POL 1.0
+#define RIGHT_ENC_POL -1.0
+#define LEFT_MOTOR_POL 1.0
+#define RIGHT_MOTOR_POL -1.0
 
 // TODO: Populate with calibration data (recommended to generate these for reverse direction as well)
-#define SLOPE_L 1.0
-#define SLOPE_R 1.0
-#define INTERCEPT_L -0.0
-#define INTERCEPT_R -0.0
+#define RPM_TO_M_S WHEEL_RADIUS*2.0*PI/60.0
+#define SLOPE_L 0.00369/RPM_TO_M_S
+#define SLOPE_R 0.00357/RPM_TO_M_S
+#define INTERCEPT_L 0.0742
+#define INTERCEPT_R 0.0899
 
 // TODO: Decide which controller is used, open loop = 1, PID = 0
 #define OPEN_LOOP 1
@@ -120,5 +121,6 @@ pid_parameters_t turn_vel_pid_params = {
 };
 
 float clamp_duty(float duty);
+float clamp_theta(float theta);
 
 #endif

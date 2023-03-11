@@ -5,8 +5,15 @@
 
 #define LEFT_MOTOR_CHANNEL      1
 #define RIGHT_MOTOR_CHANNEL     3
-#define WHEEL_RADIUS            0.08
+#define WHEEL_RADIUS            0.085/2
 #define WHEEL_BASE              0.15
+// #define RPM_TO_M_S				WHEEL_RADIUS*2.0*PI/60.0
+// #define R_MOTOR_SLOPE           0.00357/RPM_TO_M_S
+// #define L_MOTOR_SLOPE           0.00369/RPM_TO_M_S
+// #define R_MOTOR_INT             0.0899
+// #define L_MOTOR_INT             0.0742
+// #define R_MOT_POL				-1.0
+// #define L_MOT_POL				1.0
 
 typedef enum mbot_fram_cfg_length_t{
 	WHEEL_CALIBRATION_LEN = 8 * sizeof(float), // 8 floats

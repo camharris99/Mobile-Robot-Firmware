@@ -179,11 +179,23 @@ bool timer_cb(repeating_timer_t *rt)
          *      - Use the equations provided in the document to compute the odometry components
          *      - Remember to clamp the orientation between [0, 2pi]!
          *************************************************************/
-        float delta_d, delta_theta; // displacement in meters and rotation in radians
 
         /*************************************************************
          * End of TODO
          *************************************************************/
+
+        float delta_d, delta_theta, delta_x, delta_y; // displacement in meters and rotation in radians
+    
+        delta_theta = (current_encoders.right_delta - current_encoders.left_delta)*enc2meters/WHEEL_BASE;
+        delta_d = (current_encoders.right_delta + current_encoders.left_delta)*enc2meters/2.0;
+
+        delta_x = delta_d*cos(current_odom.theta + delta_theta/2.0);
+        delta_y = delta_d*sin(current_odom.theta + delta_theta/2.0);
+
+        current_odom.utime = cur_pico_time;
+        current_odom.x = current_odom.x + delta_x;
+        current_odom.y = current_odom.y + delta_y;
+        current_odom.theta = clamp_theta(current_odom.theta + delta_theta);
 
         // get the current motor command state (if we have one)
         if (comms_get_topic_data(MBOT_MOTOR_COMMAND, &current_cmd))
@@ -196,16 +208,38 @@ bool timer_cb(repeating_timer_t *rt)
             if (OPEN_LOOP)
             {
                 /*************************************************************
-                 * TODO:
-                 *      - Implement the open loop motor controller to compute the left
-                 *          and right wheel commands
-                 *      - Determine the setpoint velocities for left and right motor using the wheel velocity model
-                 *      - To compute the measured velocities, use dt as the timestep (∆t)
-                 ************************************************************/
+                * TODO:
+                *      - Implement the open loop motor controller to compute the left
+                *          and right wheel commands
+                *      - Determine the setpoint velocities for left and right motor using the wheel velocity model
+                *      - To compute the measured velocities, use dt as the timestep (∆t)
+                ************************************************************/
 
                 /*************************************************************
-                 * End of TODO
-                 *************************************************************/
+                * End of TODO
+                *************************************************************/
+
+                if (current_cmd.angular_v == 0) {
+                    l_duty = current_cmd.trans_v;
+                    r_duty = current_cmd.trans_v;
+                } else {
+                
+                    left_sp = current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0;
+                    right_sp = current_cmd.trans_v + current_cmd.angular_v*WHEEL_BASE/2.0;
+
+                    if (left_sp != 0) {
+                        l_duty = (fabs(left_sp)/left_sp)*(SLOPE_L*left_sp + INTERCEPT_L);
+                    } else {
+                        l_duty = 0;
+                    }
+                    if (right_sp != 0) {
+                        r_duty = (fabs(right_sp)/right_sp)*(SLOPE_R*right_sp + INTERCEPT_R);
+                    } else {
+                        r_duty = 0;
+                    }
+                    
+                }
+
             }
             else
             {
@@ -232,6 +266,7 @@ bool timer_cb(repeating_timer_t *rt)
                  ************************************************************/
                 float fwd_sp, turn_sp;                     // forward and turn setpoints in m/s and rad/s
                 float measured_vel_fwd, measured_vel_turn; // measured forward and turn velocities in m/s and rad/s
+
 
                 /**
                  *  Example closed loop controller
@@ -406,4 +441,11 @@ float clamp_duty(float duty)
         return -1.0;
     }
     return duty;
+}
+
+float clamp_theta(float theta) {
+    while (theta > 2.0*PI) {
+        theta -= 2.0*PI;
+    }
+    return theta;
 }
