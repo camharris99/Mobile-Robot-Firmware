@@ -6,8 +6,8 @@
 #include <hardware/adc.h>
 
 #define INT_16_MAX 32768
-#define ENCODER_RESOLUTION 48.0
-#define GEAR_RATIO 20.4
+#define ENCODER_RESOLUTION 20.0
+#define GEAR_RATIO 78.0
 #define TIMESTEP_S 1.5
 #define NUM_POINTS 25
 
@@ -30,7 +30,7 @@ int main() {
     int encoder_reading;
     float current_reading;
     float wheel_speed;
-    printf("\nDuty\tSpeed\tCurrent\n");
+    printf("\nDuty,Speed,Current\n");
     adc_select_input(0);
     for (; d < INT_16_MAX; d += INT_16_MAX/NUM_POINTS) {
         rc_motor_set(1, d);
@@ -40,7 +40,7 @@ int main() {
         for(int i=0; i<10; i++){
             current_reading += I_conversion_factor * adc_read()/10;
         }
-        printf("%f\t%f\t%f\n", (float)d/(float)INT_16_MAX, wheel_speed, current_reading);
+        printf("%f,%f,%f\n", (float)d/(float)INT_16_MAX, wheel_speed, current_reading);
         sleep_ms(1000*TIMESTEP_S);
     }
     rc_motor_set(1, 0);
@@ -48,7 +48,7 @@ int main() {
     sleep_ms(3000);
     adc_select_input(2);
     printf("\nTesting motor 3...\n");
-    printf("\nDuty\tSpeed\tCurrent\n");
+    printf("\nDuty,Speed,Current\n");
     for (; d < INT_16_MAX; d += INT_16_MAX/NUM_POINTS) {
         rc_motor_set(3, d);
         encoder_reading = -rc_encoder_read_delta(3);
@@ -57,7 +57,7 @@ int main() {
         for(int i=0; i<10; i++){
             current_reading += I_conversion_factor * adc_read()/10;
         }
-        printf("%f\t%f\t%f\n", (float)d/(float)INT_16_MAX, wheel_speed, current_reading);
+        printf("%f,%f,%f\n", (float)d/(float)INT_16_MAX, wheel_speed, current_reading);
         sleep_ms(1000*TIMESTEP_S);
     }
     

@@ -5,8 +5,8 @@
 
 #define LEFT_MOTOR_CHANNEL      1
 #define RIGHT_MOTOR_CHANNEL     3
-#define WHEEL_RADIUS            0.085/2
-#define WHEEL_BASE              0.15
+#define WHEEL_RADIUS            26.5/PI/200
+#define WHEEL_BASE              0.16
 // #define RPM_TO_M_S				WHEEL_RADIUS*2.0*PI/60.0
 // #define R_MOTOR_SLOPE           0.00357/RPM_TO_M_S
 // #define L_MOTOR_SLOPE           0.00369/RPM_TO_M_S

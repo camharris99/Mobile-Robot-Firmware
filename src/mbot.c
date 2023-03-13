@@ -32,6 +32,9 @@ uint64_t current_pico_time = 0;
 
 float enc2meters = ((2.0 * PI * WHEEL_RADIUS) / (GEAR_RATIO * ENCODER_RES));
 
+float l_duty_to_print = 0.0;
+float r_duty_to_print = 0.0;
+
 void timestamp_cb(timestamp_t *received_timestamp)
 {
     // if we havent set the offset yet
@@ -200,7 +203,7 @@ bool timer_cb(repeating_timer_t *rt)
         // get the current motor command state (if we have one)
         if (comms_get_topic_data(MBOT_MOTOR_COMMAND, &current_cmd))
         {
-            int16_t l_cmd, r_cmd;                 // left and right motor commands
+            float l_cmd, r_cmd;                 // left and right motor commands
             float left_sp, right_sp;              // speed in m/s
             float measured_vel_l, measured_vel_r; // measured velocity in m/s
             float l_duty, r_duty;                 // duty cycle in range [-1, 1]
@@ -218,27 +221,12 @@ bool timer_cb(repeating_timer_t *rt)
                 /*************************************************************
                 * End of TODO
                 *************************************************************/
-
-                if (current_cmd.angular_v == 0) {
-                    l_duty = current_cmd.trans_v;
-                    r_duty = current_cmd.trans_v;
-                } else {
                 
-                    left_sp = current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0;
-                    right_sp = current_cmd.trans_v + current_cmd.angular_v*WHEEL_BASE/2.0;
+                left_sp = current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0; // m/s
+                right_sp = current_cmd.trans_v + current_cmd.angular_v*WHEEL_BASE/2.0; // m/s
 
-                    if (left_sp != 0) {
-                        l_duty = (fabs(left_sp)/left_sp)*(SLOPE_L*left_sp + INTERCEPT_L);
-                    } else {
-                        l_duty = 0;
-                    }
-                    if (right_sp != 0) {
-                        r_duty = (fabs(right_sp)/right_sp)*(SLOPE_R*right_sp + INTERCEPT_R);
-                    } else {
-                        r_duty = 0;
-                    }
-                    
-                }
+                l_duty = (signof(left_sp)*fabs(SLOPE_L*left_sp) + signof(left_sp)*fabs(INTERCEPT_L));
+                r_duty = (signof(right_sp)*fabs(SLOPE_R*right_sp) + signof(right_sp)*fabs(INTERCEPT_R));
 
             }
             else
@@ -283,6 +271,9 @@ bool timer_cb(repeating_timer_t *rt)
             // Clamp duty cycle to [-1, 1]
             l_duty = clamp_duty(l_duty);
             r_duty = clamp_duty(r_duty);
+
+            l_duty_to_print = l_duty;
+            r_duty_to_print = r_duty;
 
             // duty to motor command
             l_cmd = LEFT_MOTOR_POL * (int)(l_duty * 0.95 * pow(2, 15));
@@ -421,7 +412,9 @@ int main()
 
     while (running)
     {
-        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |\n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v);
+        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |\
+        \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY  |  R DUTY  | \
+        \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print);
     }
 }
 
@@ -448,4 +441,14 @@ float clamp_theta(float theta) {
         theta -= 2.0*PI;
     }
     return theta;
+}
+
+float signof(float val) {
+    if (fabs(val) <= 0.001) {
+        return 0.0;
+    } else if (val > 0.001) {
+        return 1.0;
+    } else {
+        return -1.0;
+    }
 }
