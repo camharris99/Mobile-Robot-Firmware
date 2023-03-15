@@ -35,6 +35,9 @@ float r_duty_to_print = 0;
 
 float enc2meters = ((2.0 * PI * WHEEL_RADIUS) / (GEAR_RATIO * ENCODER_RES));
 
+float l_duty_to_print = 0.0;
+float r_duty_to_print = 0.0;
+
 void timestamp_cb(timestamp_t *received_timestamp)
 {
     // if we havent set the offset yet
@@ -198,6 +201,19 @@ bool timer_cb(repeating_timer_t *rt)
          * End of TODO
          *************************************************************/
 
+        float delta_d, delta_theta, delta_x, delta_y; // displacement in meters and rotation in radians
+    
+        delta_theta = (current_encoders.right_delta - current_encoders.left_delta)*enc2meters/WHEEL_BASE;
+        delta_d = (current_encoders.right_delta + current_encoders.left_delta)*enc2meters/2.0;
+
+        delta_x = delta_d*cos(current_odom.theta + delta_theta/2.0);
+        delta_y = delta_d*sin(current_odom.theta + delta_theta/2.0);
+
+        current_odom.utime = cur_pico_time;
+        current_odom.x = current_odom.x + delta_x;
+        current_odom.y = current_odom.y + delta_y;
+        current_odom.theta = clamp_theta(current_odom.theta + delta_theta);
+
         // get the current motor command state (if we have one)
         if (comms_get_topic_data(MBOT_MOTOR_COMMAND, &current_cmd))
         {
@@ -209,12 +225,12 @@ bool timer_cb(repeating_timer_t *rt)
             if (OPEN_LOOP)
             {
                 /*************************************************************
-                 * TODO:
-                 *      - Implement the open loop motor controller to compute the left
-                 *          and right wheel commands
-                 *      - Determine the setpoint velocities for left and right motor using the wheel velocity model
-                 *      - To compute the measured velocities, use dt as the timestep (∆t)
-                 ************************************************************/
+                * TODO:
+                *      - Implement the open loop motor controller to compute the left
+                *          and right wheel commands
+                *      - Determine the setpoint velocities for left and right motor using the wheel velocity model
+                *      - To compute the measured velocities, use dt as the timestep (∆t)
+                ************************************************************/
 
                 // REF Motor velocity in m/s
                 left_sp = (current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0);
@@ -247,8 +263,15 @@ bool timer_cb(repeating_timer_t *rt)
                 measured_vel_r = enc_delta_r*enc2meters/dt;
 
                 /*************************************************************
-                 * End of TODO
-                 *************************************************************/
+                * End of TODO
+                *************************************************************/
+                
+                left_sp = current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0; // m/s
+                right_sp = current_cmd.trans_v + current_cmd.angular_v*WHEEL_BASE/2.0; // m/s
+
+                l_duty = (signof(left_sp)*fabs(SLOPE_L*left_sp) + signof(left_sp)*fabs(INTERCEPT_L));
+                r_duty = (signof(right_sp)*fabs(SLOPE_R*right_sp) + signof(right_sp)*fabs(INTERCEPT_R));
+
             }
             else
             {
@@ -333,6 +356,9 @@ bool timer_cb(repeating_timer_t *rt)
             // Clamp duty cycle to [-1, 1]
             l_duty = clamp_duty(l_duty);
             r_duty = clamp_duty(r_duty);
+
+            l_duty_to_print = l_duty;
+            r_duty_to_print = r_duty;
 
             // duty to motor command
             l_cmd = LEFT_MOTOR_POL * (int)(l_duty * 0.95 * pow(2, 15));
@@ -480,7 +506,9 @@ int main()
 
     while (running)
     {
-        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |\         \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY  |  R DUTY  | \         \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print);
+        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |\
+        \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY  |  R DUTY  | \
+        \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print);
     }
 }
 
@@ -526,3 +554,45 @@ float signof(float val) {
     }
 }
 
+
+float clamp_angle(float angle)
+{
+    float clamped = angle;
+    while (clamped > 2*PI || clamped < 0)
+    {
+        if (clamped > 2*PI)
+            clamped = clamped - 2*PI;
+        if (clamped < 0)
+            clamped = clamped + 2*PI;
+    }
+
+    return clamped;
+}
+
+float signof(float val) {
+    if (fabs(val) <= 0.001) {
+        return 0.0;
+    } else if (val > 0.001) {
+        return 1.0;
+    } else {
+        return -1.0;
+    }
+}
+
+
+float clamp_theta(float theta) {
+    while (theta > 2.0*PI) {
+        theta -= 2.0*PI;
+    }
+    return theta;
+}
+
+float signof(float val) {
+    if (fabs(val) <= 0.001) {
+        return 0.0;
+    } else if (val > 0.001) {
+        return 1.0;
+    } else {
+        return -1.0;
+    }
+}
