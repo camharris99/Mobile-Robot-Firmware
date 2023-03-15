@@ -30,6 +30,9 @@ static rc_mpu_data_t mpu_data;
 uint64_t timestamp_offset = 0;
 uint64_t current_pico_time = 0;
 
+float l_duty_to_print = 0;
+float r_duty_to_print = 0;
+
 float enc2meters = ((2.0 * PI * WHEEL_RADIUS) / (GEAR_RATIO * ENCODER_RES));
 
 void timestamp_cb(timestamp_t *received_timestamp)
@@ -179,8 +182,18 @@ bool timer_cb(repeating_timer_t *rt)
          *      - Use the equations provided in the document to compute the odometry components
          *      - Remember to clamp the orientation between [0, 2pi]!
          *************************************************************/
-        float delta_d, delta_theta; // displacement in meters and rotation in radians
 
+        float delta_d, delta_theta; // displacement in meters and rotation in radians
+        delta_d = (enc_delta_r + enc_delta_l)*enc2meters/2.0;
+        delta_theta = (enc_delta_r - enc_delta_l)*enc2meters/WHEEL_BASE;
+
+        float delta_x, delta_y;
+        delta_x = delta_d*cos(current_odom.theta + delta_theta/2.0);
+        delta_y = delta_d*sin(current_odom.theta + delta_theta/2.0);
+
+        current_odom.x = current_odom.x + delta_x;
+        current_odom.y = current_odom.y + delta_y;
+        current_odom.theta = clamp_angle(current_odom.theta + delta_theta);
         /*************************************************************
          * End of TODO
          *************************************************************/
@@ -188,7 +201,7 @@ bool timer_cb(repeating_timer_t *rt)
         // get the current motor command state (if we have one)
         if (comms_get_topic_data(MBOT_MOTOR_COMMAND, &current_cmd))
         {
-            int16_t l_cmd, r_cmd;                 // left and right motor commands
+            float l_cmd, r_cmd;                 // left and right motor commands
             float left_sp, right_sp;              // speed in m/s
             float measured_vel_l, measured_vel_r; // measured velocity in m/s
             float l_duty, r_duty;                 // duty cycle in range [-1, 1]
@@ -202,6 +215,36 @@ bool timer_cb(repeating_timer_t *rt)
                  *      - Determine the setpoint velocities for left and right motor using the wheel velocity model
                  *      - To compute the measured velocities, use dt as the timestep (∆t)
                  ************************************************************/
+
+                // REF Motor velocity in m/s
+                left_sp = (current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0);
+                right_sp = (current_cmd.trans_v + current_cmd.angular_v*WHEEL_BASE/2.0);
+
+                //convert to motor PwM duty cycle
+                if (left_sp > 0) {
+                    l_duty = SLOPE_L*(-left_sp) + INTERCEPT_L;
+                } else if (left_sp < 0){
+                    //l_duty = -(SLOPE_L_REV*(-left_sp) + INTERCEPT_L_REV);
+                    l_duty = -(SLOPE_L*(left_sp) + INTERCEPT_L);
+                } else {
+                    l_duty = 0;
+                }
+
+                if (right_sp > 0) {
+                    r_duty = SLOPE_R*right_sp + INTERCEPT_R;
+                } else if (right_sp < 0){
+                    //r_duty = -(SLOPE_R_REV*right_sp + INTERCEPT_R_REV);
+                    r_duty = -(SLOPE_R*(-right_sp) + INTERCEPT_R);
+                } else {
+                    r_duty = 0;
+                }
+
+                l_duty_to_print = l_duty;
+                r_duty_to_print = r_duty;
+
+                // compute the measured velocities in m/s
+                measured_vel_l = enc_delta_l*enc2meters/dt;
+                measured_vel_r = enc_delta_r*enc2meters/dt;
 
                 /*************************************************************
                  * End of TODO
@@ -232,6 +275,48 @@ bool timer_cb(repeating_timer_t *rt)
                  ************************************************************/
                 float fwd_sp, turn_sp;                     // forward and turn setpoints in m/s and rad/s
                 float measured_vel_fwd, measured_vel_turn; // measured forward and turn velocities in m/s and rad/s
+
+                fwd_sp = current_cmd.trans_v;
+                turn_sp = current_cmd.angular_v;
+
+                left_sp = (current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0);
+                right_sp = (current_cmd.trans_v + current_cmd.angular_v*WHEEL_BASE/2.0);
+
+                // compute the measured velocities in m/s
+                measured_vel_l = enc_delta_l*enc2meters/dt;
+                measured_vel_r = enc_delta_r*enc2meters/dt;
+
+                float error_l, error_r;   
+                error_l = left_sp - measured_vel_l;
+                error_r = right_sp - measured_vel_r;
+
+                // ouput duty cycle
+                float pid_delta_vel_l = rc_filter_march(&left_pid, error_l);
+                float pid_delta_vel_r = rc_filter_march(&right_pid, error_r);
+
+                if (left_sp > 0) {
+                    l_duty = SLOPE_L*(-left_sp) + INTERCEPT_L;
+                } else if (left_sp < 0){
+                    //l_duty = -(SLOPE_L_REV*(-left_sp) + INTERCEPT_L_REV);
+                    l_duty = -(SLOPE_L*(left_sp) + INTERCEPT_L);
+                } else {
+                    l_duty = 0;
+                }
+
+                if (right_sp > 0) {
+                    r_duty = SLOPE_R*right_sp + INTERCEPT_R;
+                } else if (right_sp < 0){
+                    //r_duty = -(SLOPE_R_REV*right_sp + INTERCEPT_R_REV);
+                    r_duty = -(SLOPE_R*(-right_sp) + INTERCEPT_R);
+                } else {
+                    r_duty = 0;
+                }
+
+                l_duty = l_duty + pid_delta_vel_l;
+                r_duty = r_duty + pid_delta_vel_r;
+
+                l_duty_to_print = l_duty;
+                r_duty_to_print = r_duty;
 
                 /**
                  *  Example closed loop controller
@@ -357,19 +442,28 @@ int main()
      *
      *************************************************************/
 
-    // Example initialization of a PID filter defined in mbot.h
-    // my_filter = rc_filter_empty();
+    //Example initialization of a PID filter defined in mbot.h
+    left_pid = rc_filter_empty();
+    right_pid = rc_filter_empty();
 
     // Example of assigning PID parameters (using pid_parameters_t from mbot.h)
-    // rc_filter_pid(&my_filter,
-    //             pid_params.kp,
-    //             pid_params.ki,
-    //             pid_params.kd,
-    //             1.0 / pid_params.dFilterHz,
-    //             1.0 / MAIN_LOOP_HZ);
+    rc_filter_pid(&left_pid,
+                left_pid_params.kp,
+                left_pid_params.ki,
+                left_pid_params.kd,
+                1.0 / left_pid_params.dFilterHz,
+                1.0 / MAIN_LOOP_HZ);
+
+    rc_filter_pid(&right_pid,
+                right_pid_params.kp,
+                right_pid_params.ki,
+                right_pid_params.kd,
+                1.0 / right_pid_params.dFilterHz,
+                1.0 / MAIN_LOOP_HZ);
 
     // Example of setting limits to the output of the filter
-    // rc_filter_enable_saturation(&my_filter, min_val, max_val);
+    rc_filter_enable_saturation(&left_pid, -1, 1);
+    rc_filter_enable_saturation(&right_pid, -1, 1);
 
     /*************************************************************
      * End of TODO
@@ -386,7 +480,7 @@ int main()
 
     while (running)
     {
-        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |\n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v);
+        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |\         \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY  |  R DUTY  | \         \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print);
     }
 }
 
@@ -407,3 +501,28 @@ float clamp_duty(float duty)
     }
     return duty;
 }
+
+float clamp_angle(float angle)
+{
+    float clamped = angle;
+    while (clamped > 2*PI || clamped < 0)
+    {
+        if (clamped > 2*PI)
+            clamped = clamped - 2*PI;
+        if (clamped < 0)
+            clamped = clamped + 2*PI;
+    }
+
+    return clamped;
+}
+
+float signof(float val) {
+    if (fabs(val) <= 0.001) {
+        return 0.0;
+    } else if (val > 0.001) {
+        return 1.0;
+    } else {
+        return -1.0;
+    }
+}
+

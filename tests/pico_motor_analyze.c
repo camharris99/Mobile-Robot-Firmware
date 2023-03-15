@@ -6,8 +6,8 @@
 #include <hardware/adc.h>
 
 #define INT_16_MAX 32768
-#define ENCODER_RESOLUTION 48.0
-#define GEAR_RATIO 20.4
+#define ENCODER_RESOLUTION 20.0//48.0
+#define GEAR_RATIO 78.0//20.4
 #define TIMESTEP_S 1.5
 #define NUM_POINTS 25
 
@@ -25,6 +25,7 @@ int main() {
     rc_motor_init();
     rc_encoder_init();
     blink();
+    //printf("\nTesting motor 1...backward\n");
     printf("\nTesting motor 1...\n");
     int32_t d = 0;
     int encoder_reading;
@@ -33,6 +34,7 @@ int main() {
     printf("\nDuty\tSpeed\tCurrent\n");
     adc_select_input(0);
     for (; d < INT_16_MAX; d += INT_16_MAX/NUM_POINTS) {
+        //rc_motor_set(1, -d);
         rc_motor_set(1, d);
         encoder_reading = -rc_encoder_read_delta(1);
         wheel_speed = RPM_conversion_factor * encoder_reading;
@@ -47,9 +49,11 @@ int main() {
     d = 0;
     sleep_ms(3000);
     adc_select_input(2);
+    //printf("\nTesting motor 3...backward\n");
     printf("\nTesting motor 3...\n");
     printf("\nDuty\tSpeed\tCurrent\n");
     for (; d < INT_16_MAX; d += INT_16_MAX/NUM_POINTS) {
+        //rc_motor_set(3, -d);
         rc_motor_set(3, d);
         encoder_reading = -rc_encoder_read_delta(3);
         wheel_speed = RPM_conversion_factor * encoder_reading;
