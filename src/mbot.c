@@ -21,7 +21,7 @@
 #include "mbot.h"
 
 #define LED_PIN 25
-#define MAIN_LOOP_HZ 50.0 // 50 hz loop
+#define MAIN_LOOP_HZ 20.0 // 50 hz loop
 #define MAIN_LOOP_PERIOD (1.0f / MAIN_LOOP_HZ)
 
 // data to hold current mpu state
@@ -34,6 +34,14 @@ float enc2meters = ((2.0 * PI * WHEEL_RADIUS) / (GEAR_RATIO * ENCODER_RES));
 
 float l_duty_to_print = 0.0;
 float r_duty_to_print = 0.0;
+
+float l_duty_OL_to_print = 0.0;
+float r_duty_OL_to_print = 0.0;
+
+float err_l_to_print = 0.0;
+float err_r_to_print = 0.0;
+
+float gyro_to_print = 0.0;
 
 void timestamp_cb(timestamp_t *received_timestamp)
 {
@@ -172,6 +180,14 @@ bool timer_cb(repeating_timer_t *rt)
         current_encoders.left_delta = enc_delta_l;
         current_encoders.leftticks = enc_cnt_l;
 
+        // get gyro data
+        rc_mpu_data_t mpu_data;
+        rc_mpu_read_gyro(&mpu_data);
+        rc_mpu_read_accel(&mpu_data);
+
+        float gyro_heading = mpu_data.gyro[2];
+        gyro_to_print = gyro_heading;
+
         // compute new odometry
         /*************************************************************
          * TODO:
@@ -206,8 +222,11 @@ bool timer_cb(repeating_timer_t *rt)
             float l_cmd, r_cmd;                 // left and right motor commands
             float left_sp, right_sp;              // speed in m/s
             float measured_vel_l, measured_vel_r; // measured velocity in m/s
-            float l_duty, r_duty;                 // duty cycle in range [-1, 1]
+            float l_duty = 0;
+            float r_duty = 0;                 // duty cycle in range [-1, 1]
             float dt = MAIN_LOOP_PERIOD;          // time since last update in seconds
+            float error_l, error_r;
+
             if (OPEN_LOOP)
             {
                 /*************************************************************
@@ -221,7 +240,7 @@ bool timer_cb(repeating_timer_t *rt)
                 /*************************************************************
                 * End of TODO
                 *************************************************************/
-                
+
                 left_sp = current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0; // m/s
                 right_sp = current_cmd.trans_v + current_cmd.angular_v*WHEEL_BASE/2.0; // m/s
 
@@ -252,8 +271,42 @@ bool timer_cb(repeating_timer_t *rt)
                  *      - Update and the fwd_sp and turn_sp variables for this.
                  *
                  ************************************************************/
+
                 float fwd_sp, turn_sp;                     // forward and turn setpoints in m/s and rad/s
                 float measured_vel_fwd, measured_vel_turn; // measured forward and turn velocities in m/s and rad/s
+
+                fwd_sp = current_cmd.trans_v;
+                turn_sp = current_cmd.angular_v;
+
+                left_sp = (current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0);
+                right_sp = (current_cmd.trans_v + current_cmd.angular_v*WHEEL_BASE/2.0);
+
+                left_sp = rc_filter_march(&left_lpf, left_sp);
+                right_sp = rc_filter_march(&right_lpf, right_sp);
+
+                // compute the measured velocities in m/s
+                measured_vel_l = enc_delta_l*enc2meters/dt;
+                measured_vel_r = enc_delta_r*enc2meters/dt;
+
+                float error_l, error_r;   
+                error_l = left_sp - measured_vel_l;
+                error_r = right_sp - measured_vel_r;
+
+                err_r_to_print = error_r;
+                err_l_to_print = error_l;
+
+                // ouput duty cycle
+                float pid_delta_vel_l = rc_filter_march(&left_pid, error_l);
+                float pid_delta_vel_r = rc_filter_march(&right_pid, error_r);
+
+                l_duty = (signof(left_sp)*fabs(SLOPE_L*left_sp) + signof(left_sp)*fabs(INTERCEPT_L));
+                r_duty = (signof(right_sp)*fabs(SLOPE_R*right_sp) + signof(right_sp)*fabs(INTERCEPT_R));
+
+                l_duty = l_duty + pid_delta_vel_l;
+                r_duty = r_duty + pid_delta_vel_r;
+
+                l_duty_to_print = l_duty;
+                r_duty_to_print = r_duty;
 
 
                 /**
@@ -269,11 +322,12 @@ bool timer_cb(repeating_timer_t *rt)
                  *************************************************************/
             }
             // Clamp duty cycle to [-1, 1]
-            l_duty = clamp_duty(l_duty);
-            r_duty = clamp_duty(r_duty);
 
             l_duty_to_print = l_duty;
             r_duty_to_print = r_duty;
+
+            l_duty = clamp_duty(l_duty);
+            r_duty = clamp_duty(r_duty);
 
             // duty to motor command
             l_cmd = LEFT_MOTOR_POL * (int)(l_duty * 0.95 * pow(2, 15));
@@ -401,6 +455,21 @@ int main()
      * End of TODO
      *************************************************************/
 
+    left_pid = rc_filter_empty();
+    rc_filter_pid(&left_pid, left_pid_params.kp, left_pid_params.ki, left_pid_params.kd, 1.0/left_pid_params.dFilterHz, MAIN_LOOP_PERIOD);
+
+    right_pid = rc_filter_empty();
+    rc_filter_pid(&right_pid, right_pid_params.kp, right_pid_params.ki, right_pid_params.kd, 1.0/right_pid_params.dFilterHz, MAIN_LOOP_PERIOD);
+
+    left_lpf = rc_filter_empty();
+    rc_filter_first_order_lowpass(&left_lpf, MAIN_LOOP_PERIOD, 0.1);
+
+    right_lpf = rc_filter_empty();
+    rc_filter_first_order_lowpass(&right_lpf, MAIN_LOOP_PERIOD, 0.1);
+
+    rc_filter_enable_saturation(&left_pid, -1.0, 1.0);
+    rc_filter_enable_saturation(&right_pid, -1.0, 1.0);
+
     if (OPEN_LOOP)
     {
         printf("Running in open loop mode\n");
@@ -412,9 +481,9 @@ int main()
 
     while (running)
     {
-        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |\
-        \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY  |  R DUTY  | \
-        \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print);
+        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |       ERROR       |    GYRO    |\
+        \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY |  R DUTY | L ERROR  |  R ERROR  |   GYRO    |\
+        \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print, err_l_to_print, err_r_to_print, gyro_to_print);
     }
 }
 
@@ -444,9 +513,9 @@ float clamp_theta(float theta) {
 }
 
 float signof(float val) {
-    if (fabs(val) <= 0.001) {
+    if (fabs(val) <= 0.01) {
         return 0.0;
-    } else if (val > 0.001) {
+    } else if (val > 0.01) {
         return 1.0;
     } else {
         return -1.0;

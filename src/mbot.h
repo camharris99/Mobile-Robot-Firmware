@@ -28,8 +28,8 @@
 #define MAX_TURN_VEL 2.5 // max turning speed (rad/s)
 
 // TODO: Enter the polarity values for your motors and encoders
-#define LEFT_ENC_POL -1.0
-#define RIGHT_ENC_POL 1.0
+#define LEFT_ENC_POL 1.0
+#define RIGHT_ENC_POL -1.0
 #define LEFT_MOTOR_POL -1.0
 #define RIGHT_MOTOR_POL 1.0
 
@@ -41,7 +41,7 @@
 #define INTERCEPT_R 0.0775
 
 // TODO: Decide which controller is used, open loop = 1, PID = 0
-#define OPEN_LOOP 1
+#define OPEN_LOOP 0
 
 // data to hold current mpu state (not used)
 static rc_mpu_data_t mpu_data;
@@ -94,21 +94,23 @@ rc_filter_t left_pid;
 rc_filter_t right_pid;
 rc_filter_t fwd_vel_pid;
 rc_filter_t turn_vel_pid;
+rc_filter_t left_lpf;
+rc_filter_t right_lpf;
 
 pid_parameters_t left_pid_params = {
-    .kp = 1.0,
+    .kp = 2.3,
     .ki = 0.0,
     .kd = 0.0,
     .dFilterHz = 25.0,
 };
 pid_parameters_t right_pid_params = {
-    .kp = 1.0,
+    .kp = 2.3,
     .ki = 0.0,
     .kd = 0.0,
     .dFilterHz = 25.0,
 };
 pid_parameters_t fwd_vel_pid_params = {
-    .kp = 1.0,
+    .kp = 0.5,
     .ki = 0.0,
     .kd = 0.0,
     .dFilterHz = 10.0,
