@@ -35,9 +35,6 @@ float r_duty_to_print = 0;
 
 float enc2meters = ((2.0 * PI * WHEEL_RADIUS) / (GEAR_RATIO * ENCODER_RES));
 
-float l_duty_to_print = 0.0;
-float r_duty_to_print = 0.0;
-
 void timestamp_cb(timestamp_t *received_timestamp)
 {
     // if we havent set the offset yet
@@ -201,19 +198,6 @@ bool timer_cb(repeating_timer_t *rt)
          * End of TODO
          *************************************************************/
 
-        float delta_d, delta_theta, delta_x, delta_y; // displacement in meters and rotation in radians
-    
-        delta_theta = (current_encoders.right_delta - current_encoders.left_delta)*enc2meters/WHEEL_BASE;
-        delta_d = (current_encoders.right_delta + current_encoders.left_delta)*enc2meters/2.0;
-
-        delta_x = delta_d*cos(current_odom.theta + delta_theta/2.0);
-        delta_y = delta_d*sin(current_odom.theta + delta_theta/2.0);
-
-        current_odom.utime = cur_pico_time;
-        current_odom.x = current_odom.x + delta_x;
-        current_odom.y = current_odom.y + delta_y;
-        current_odom.theta = clamp_theta(current_odom.theta + delta_theta);
-
         // get the current motor command state (if we have one)
         if (comms_get_topic_data(MBOT_MOTOR_COMMAND, &current_cmd))
         {
@@ -225,35 +209,19 @@ bool timer_cb(repeating_timer_t *rt)
             if (OPEN_LOOP)
             {
                 /*************************************************************
-                * TODO:
-                *      - Implement the open loop motor controller to compute the left
-                *          and right wheel commands
-                *      - Determine the setpoint velocities for left and right motor using the wheel velocity model
-                *      - To compute the measured velocities, use dt as the timestep (∆t)
-                ************************************************************/
+                 * TODO:
+                 *      - Implement the open loop motor controller to compute the left
+                 *          and right wheel commands
+                 *      - Determine the setpoint velocities for left and right motor using the wheel velocity model
+                 *      - To compute the measured velocities, use dt as the timestep (∆t)
+                 ************************************************************/
 
                 // REF Motor velocity in m/s
                 left_sp = (current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0);
                 right_sp = (current_cmd.trans_v + current_cmd.angular_v*WHEEL_BASE/2.0);
 
-                //convert to motor PwM duty cycle
-                if (left_sp > 0) {
-                    l_duty = SLOPE_L*(-left_sp) + INTERCEPT_L;
-                } else if (left_sp < 0){
-                    //l_duty = -(SLOPE_L_REV*(-left_sp) + INTERCEPT_L_REV);
-                    l_duty = -(SLOPE_L*(left_sp) + INTERCEPT_L);
-                } else {
-                    l_duty = 0;
-                }
-
-                if (right_sp > 0) {
-                    r_duty = SLOPE_R*right_sp + INTERCEPT_R;
-                } else if (right_sp < 0){
-                    //r_duty = -(SLOPE_R_REV*right_sp + INTERCEPT_R_REV);
-                    r_duty = -(SLOPE_R*(-right_sp) + INTERCEPT_R);
-                } else {
-                    r_duty = 0;
-                }
+                l_duty = left_feedforward(left_sp);
+                r_duty = right_feedforward(right_sp);
 
                 l_duty_to_print = l_duty;
                 r_duty_to_print = r_duty;
@@ -263,15 +231,8 @@ bool timer_cb(repeating_timer_t *rt)
                 measured_vel_r = enc_delta_r*enc2meters/dt;
 
                 /*************************************************************
-                * End of TODO
-                *************************************************************/
-                
-                left_sp = current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0; // m/s
-                right_sp = current_cmd.trans_v + current_cmd.angular_v*WHEEL_BASE/2.0; // m/s
-
-                l_duty = (signof(left_sp)*fabs(SLOPE_L*left_sp) + signof(left_sp)*fabs(INTERCEPT_L));
-                r_duty = (signof(right_sp)*fabs(SLOPE_R*right_sp) + signof(right_sp)*fabs(INTERCEPT_R));
-
+                 * End of TODO
+                 *************************************************************/
             }
             else
             {
@@ -302,10 +263,13 @@ bool timer_cb(repeating_timer_t *rt)
                 fwd_sp = current_cmd.trans_v;
                 turn_sp = current_cmd.angular_v;
 
-                left_sp = (current_cmd.trans_v - current_cmd.angular_v*WHEEL_BASE/2.0);
-                right_sp = (current_cmd.trans_v + current_cmd.angular_v*WHEEL_BASE/2.0);
+                left_sp = (fwd_sp - turn_sp*WHEEL_BASE/2.0);
+                right_sp = (fwd_sp + turn_sp*WHEEL_BASE/2.0);
 
-                // compute the measured velocities in m/s
+                left_sp = rc_filter_march(&ref_left_LPF, left_sp);
+                right_sp =  rc_filter_march(&ref_right_LPF, right_sp);
+
+                // Compute the measured velocities in m/s
                 measured_vel_l = enc_delta_l*enc2meters/dt;
                 measured_vel_r = enc_delta_r*enc2meters/dt;
 
@@ -313,28 +277,14 @@ bool timer_cb(repeating_timer_t *rt)
                 error_l = left_sp - measured_vel_l;
                 error_r = right_sp - measured_vel_r;
 
-                // ouput duty cycle
+                // Compensated duty cycle from PID controller
                 float pid_delta_vel_l = rc_filter_march(&left_pid, error_l);
                 float pid_delta_vel_r = rc_filter_march(&right_pid, error_r);
 
-                if (left_sp > 0) {
-                    l_duty = SLOPE_L*(-left_sp) + INTERCEPT_L;
-                } else if (left_sp < 0){
-                    //l_duty = -(SLOPE_L_REV*(-left_sp) + INTERCEPT_L_REV);
-                    l_duty = -(SLOPE_L*(left_sp) + INTERCEPT_L);
-                } else {
-                    l_duty = 0;
-                }
+                l_duty = left_feedforward(left_sp);
+                r_duty = right_feedforward(right_sp);
 
-                if (right_sp > 0) {
-                    r_duty = SLOPE_R*right_sp + INTERCEPT_R;
-                } else if (right_sp < 0){
-                    //r_duty = -(SLOPE_R_REV*right_sp + INTERCEPT_R_REV);
-                    r_duty = -(SLOPE_R*(-right_sp) + INTERCEPT_R);
-                } else {
-                    r_duty = 0;
-                }
-
+                // PWM duty cycle to the motors
                 l_duty = l_duty + pid_delta_vel_l;
                 r_duty = r_duty + pid_delta_vel_r;
 
@@ -356,9 +306,6 @@ bool timer_cb(repeating_timer_t *rt)
             // Clamp duty cycle to [-1, 1]
             l_duty = clamp_duty(l_duty);
             r_duty = clamp_duty(r_duty);
-
-            l_duty_to_print = l_duty;
-            r_duty_to_print = r_duty;
 
             // duty to motor command
             l_cmd = LEFT_MOTOR_POL * (int)(l_duty * 0.95 * pow(2, 15));
@@ -472,6 +419,10 @@ int main()
     left_pid = rc_filter_empty();
     right_pid = rc_filter_empty();
 
+    ref_left_LPF = rc_filter_empty();
+    ref_right_LPF = rc_filter_empty();
+    kd_LPF = rc_filter_empty();
+
     // Example of assigning PID parameters (using pid_parameters_t from mbot.h)
     rc_filter_pid(&left_pid,
                 left_pid_params.kp,
@@ -487,9 +438,21 @@ int main()
                 1.0 / right_pid_params.dFilterHz,
                 1.0 / MAIN_LOOP_HZ);
 
+    rc_filter_first_order_lowpass(&ref_left_LPF,
+                MAIN_LOOP_PERIOD,
+                0.25);
+
+    rc_filter_first_order_lowpass(&ref_right_LPF,
+                MAIN_LOOP_PERIOD,
+                0.25);
+
+    rc_filter_first_order_lowpass(&kd_LPF,
+                MAIN_LOOP_PERIOD,
+                0.25);
+
     // Example of setting limits to the output of the filter
-    rc_filter_enable_saturation(&left_pid, -1, 1);
-    rc_filter_enable_saturation(&right_pid, -1, 1);
+    rc_filter_enable_saturation(&left_pid, -2, 2);
+    rc_filter_enable_saturation(&right_pid, -2, 2);
 
     /*************************************************************
      * End of TODO
@@ -506,9 +469,7 @@ int main()
 
     while (running)
     {
-        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |\
-        \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY  |  R DUTY  | \
-        \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print);
+        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |\         \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY  |  R DUTY  | \         \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print);
     }
 }
 
@@ -554,45 +515,31 @@ float signof(float val) {
     }
 }
 
-
-float clamp_angle(float angle)
-{
-    float clamped = angle;
-    while (clamped > 2*PI || clamped < 0)
-    {
-        if (clamped > 2*PI)
-            clamped = clamped - 2*PI;
-        if (clamped < 0)
-            clamped = clamped + 2*PI;
-    }
-
-    return clamped;
-}
-
-float signof(float val) {
-    if (fabs(val) <= 0.001) {
-        return 0.0;
-    } else if (val > 0.001) {
-        return 1.0;
+float left_feedforward(float left_sp){
+    float l_duty;
+    // Feedforward from openloop calibration
+    if (left_sp > 0.01) {
+        l_duty = SLOPE_L*(-left_sp) + INTERCEPT_L;
+    } else if (left_sp < -0.01){
+        //l_duty = -(SLOPE_L_REV*(-left_sp) + INTERCEPT_L_REV);
+        l_duty = -(SLOPE_L*(left_sp) + INTERCEPT_L);
     } else {
-        return -1.0;
+        l_duty = 0;
     }
+    return l_duty;
+
 }
 
+float right_feedforward(float right_sp){
 
-float clamp_theta(float theta) {
-    while (theta > 2.0*PI) {
-        theta -= 2.0*PI;
-    }
-    return theta;
-}
-
-float signof(float val) {
-    if (fabs(val) <= 0.001) {
-        return 0.0;
-    } else if (val > 0.001) {
-        return 1.0;
+    float r_duty;
+    if (right_sp > 0.01) {
+        r_duty = SLOPE_R*right_sp + INTERCEPT_R;
+    } else if (right_sp < -0.01){
+        //r_duty = -(SLOPE_R_REV*right_sp + INTERCEPT_R_REV);
+        r_duty = -(SLOPE_R*(-right_sp) + INTERCEPT_R);
     } else {
-        return -1.0;
+        r_duty = 0;
     }
+    return r_duty;
 }

@@ -100,16 +100,21 @@ rc_filter_t right_pid;
 rc_filter_t fwd_vel_pid;
 rc_filter_t turn_vel_pid;
 
+rc_filter_t ref_left_LPF;
+rc_filter_t ref_right_LPF;
+rc_filter_t kd_LPF;
+
+
 pid_parameters_t left_pid_params = {
     .kp = 4.0,
     .ki = 0.0,
-    .kd = 0.0008,
+    .kd = 0.01,
     .dFilterHz = 25.0,
 };
 pid_parameters_t right_pid_params = {
     .kp = 4.0,
     .ki = 0.0,
-    .kd = 0.0008,
+    .kd = 0.01,
     .dFilterHz = 25.0,
 };
 pid_parameters_t fwd_vel_pid_params = {
@@ -128,5 +133,7 @@ pid_parameters_t turn_vel_pid_params = {
 float clamp_duty(float duty);
 float clamp_angle(float angle);
 float signof(float val);
+float left_feedforward(float left_sp);
+float right_feedforward(float right_sp);
 
 #endif
