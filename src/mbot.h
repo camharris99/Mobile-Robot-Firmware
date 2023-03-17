@@ -102,8 +102,8 @@ rc_filter_t turn_vel_pid;
 
 rc_filter_t ref_left_LPF;
 rc_filter_t ref_right_LPF;
-rc_filter_t kd_left_LPF;
-rc_filter_t kd_right_LPF;
+rc_filter_t kd_LPF;
+
 
 pid_parameters_t left_pid_params = {
     .kp = 4.0,
