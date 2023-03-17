@@ -277,22 +277,16 @@ bool timer_cb(repeating_timer_t *rt)
                 error_l = left_sp - measured_vel_l;
                 error_r = right_sp - measured_vel_r;
 
-                // Compensated duty cycle from P controller
-                float p_delta_vel_l = rc_filter_march(&left_p, error_l);
-                float p_delta_vel_r = rc_filter_march(&right_p, error_r);
-
-                // Compensated duty cycle from D controller
-                float d_delta_vel_l = rc_filter_march(&left_d, error_l);
-                float d_delta_vel_r = rc_filter_march(&right_d, error_r);
-                d_delta_vel_l = rc_filter_march(&kd_left_LPF, d_delta_vel_l);
-                d_delta_vel_r = rc_filter_march(&kd_right_LPF, d_delta_vel_r);
+                // Compensated duty cycle from PID controller
+                float pid_delta_vel_l = rc_filter_march(&left_pid, error_l);
+                float pid_delta_vel_r = rc_filter_march(&right_pid, error_r);
 
                 l_duty = left_feedforward(left_sp);
                 r_duty = right_feedforward(right_sp);
 
                 // PWM duty cycle to the motors
-                l_duty = l_duty + p_delta_vel_l + d_delta_vel_l;
-                r_duty = r_duty + p_delta_vel_r + d_delta_vel_r;
+                l_duty = l_duty + pid_delta_vel_l;
+                r_duty = r_duty + pid_delta_vel_r;
 
                 l_duty_to_print = l_duty;
                 r_duty_to_print = r_duty;
@@ -422,64 +416,43 @@ int main()
      *************************************************************/
 
     //Example initialization of a PID filter defined in mbot.h
-    left_p = rc_filter_empty();
-    right_p = rc_filter_empty();
-    left_d = rc_filter_empty();
-    right_d = rc_filter_empty();
+    left_pid = rc_filter_empty();
+    right_pid = rc_filter_empty();
 
     ref_left_LPF = rc_filter_empty();
     ref_right_LPF = rc_filter_empty();
-    kd_left_LPF = rc_filter_empty();
-    kd_right_LPF = rc_filter_empty();
+    kd_LPF = rc_filter_empty();
 
     // Example of assigning PID parameters (using pid_parameters_t from mbot.h)
-    rc_filter_pid(&left_p,
-                left_p_params.kp,
-                left_p_params.ki,
-                left_p_params.kd,
-                1.0 / left_p_params.dFilterHz,
+    rc_filter_pid(&left_pid,
+                left_pid_params.kp,
+                left_pid_params.ki,
+                left_pid_params.kd,
+                1.0 / left_pid_params.dFilterHz,
                 1.0 / MAIN_LOOP_HZ);
 
-    rc_filter_pid(&right_p,
-                right_p_params.kp,
-                right_p_params.ki,
-                right_p_params.kd,
-                1.0 / right_p_params.dFilterHz,
-                1.0 / MAIN_LOOP_HZ);
-
-    rc_filter_pid(&left_d,
-                left_d_params.kp,
-                left_d_params.ki,
-                left_d_params.kd,
-                1.0 / left_d_params.dFilterHz,
-                1.0 / MAIN_LOOP_HZ);
-
-    rc_filter_pid(&right_p,
-                right_d_params.kp,
-                right_d_params.ki,
-                right_d_params.kd,
-                1.0 / right_d_params.dFilterHz,
+    rc_filter_pid(&right_pid,
+                right_pid_params.kp,
+                right_pid_params.ki,
+                right_pid_params.kd,
+                1.0 / right_pid_params.dFilterHz,
                 1.0 / MAIN_LOOP_HZ);
 
     rc_filter_first_order_lowpass(&ref_left_LPF,
                 MAIN_LOOP_PERIOD,
-                0.1);
+                0.25);
 
     rc_filter_first_order_lowpass(&ref_right_LPF,
                 MAIN_LOOP_PERIOD,
-                0.1);
+                0.25);
 
-    rc_filter_first_order_lowpass(&kd_left_LPF,
+    rc_filter_first_order_lowpass(&kd_LPF,
                 MAIN_LOOP_PERIOD,
-                0.1);
-    
-    rc_filter_first_order_lowpass(&kd_right_LPF,
-                MAIN_LOOP_PERIOD,
-                0.1);
+                0.25);
 
     // Example of setting limits to the output of the filter
-    // rc_filter_enable_saturation(&left_p, -2, 2);
-    // rc_filter_enable_saturation(&right_p, -2, 2);
+    rc_filter_enable_saturation(&left_pid, -2, 2);
+    rc_filter_enable_saturation(&right_pid, -2, 2);
 
     /*************************************************************
      * End of TODO

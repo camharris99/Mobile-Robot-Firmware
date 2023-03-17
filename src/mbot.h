@@ -35,10 +35,10 @@
 
 // TODO: Populate with calibration data (recommended to generate these for reverse direction as well)
 #define RPM_TO_M_S (WHEEL_RADIUS*2.0*PI/60.0)
-#define SLOPE_L -0.005389/RPM_TO_M_S
-#define SLOPE_R 0.005636/RPM_TO_M_S
-#define INTERCEPT_L 0.112352
-#define INTERCEPT_R 0.117971
+#define SLOPE_L -0.006394/RPM_TO_M_S
+#define SLOPE_R 0.006616/RPM_TO_M_S
+#define INTERCEPT_L 0.098351
+#define INTERCEPT_R 0.103696
 
 #define SLOPE_L_REV 0.0039252/RPM_TO_M_S
 #define SLOPE_R_REV 0.0038660/RPM_TO_M_S
@@ -95,39 +95,24 @@ mbot_motor_command_t current_cmd = {0};
  * };
  */
 
-rc_filter_t left_p;
-rc_filter_t right_p;
-rc_filter_t left_d;
-rc_filter_t right_d;
+rc_filter_t left_pid;
+rc_filter_t right_pid;
 rc_filter_t fwd_vel_pid;
 rc_filter_t turn_vel_pid;
 
 rc_filter_t ref_left_LPF;
 rc_filter_t ref_right_LPF;
-rc_filter_t kd_left_LPF;
-rc_filter_t kd_right_LPF;
+rc_filter_t kd_LPF;
 
-pid_parameters_t left_p_params = {
-    .kp = 4.3,
-    .ki = 0.0,
-    .kd = 0.0,
-    .dFilterHz = 25.0,
-};
-pid_parameters_t right_p_params = {
-    .kp = 4.3,
-    .ki = 0.0,
-    .kd = 0.0,
-    .dFilterHz = 25.0,
-};
 
-pid_parameters_t left_d_params = {
-    .kp = 0.0,
+pid_parameters_t left_pid_params = {
+    .kp = 4.0,
     .ki = 0.0,
     .kd = 0.01,
     .dFilterHz = 25.0,
 };
-pid_parameters_t right_d_params = {
-    .kp = 0.0,
+pid_parameters_t right_pid_params = {
+    .kp = 4.0,
     .ki = 0.0,
     .kd = 0.01,
     .dFilterHz = 25.0,
