@@ -281,9 +281,6 @@ bool timer_cb(repeating_timer_t *rt)
                 float pid_delta_vel_l = rc_filter_march(&left_pid, error_l);
                 float pid_delta_vel_r = rc_filter_march(&right_pid, error_r);
 
-                // pid_delta_vel_l = rc_filter_march(&kd_left_LPF, pid_delta_vel_l);
-                // pid_delta_vel_r = rc_filter_march(&kd_right_LPF, pid_delta_vel_r);
-
                 l_duty = left_feedforward(left_sp);
                 r_duty = right_feedforward(right_sp);
 
@@ -424,8 +421,7 @@ int main()
 
     ref_left_LPF = rc_filter_empty();
     ref_right_LPF = rc_filter_empty();
-    kd_left_LPF = rc_filter_empty();
-    kd_right_LPF = rc_filter_empty();
+    kd_LPF = rc_filter_empty();
 
     // Example of assigning PID parameters (using pid_parameters_t from mbot.h)
     rc_filter_pid(&left_pid,
@@ -444,19 +440,15 @@ int main()
 
     rc_filter_first_order_lowpass(&ref_left_LPF,
                 MAIN_LOOP_PERIOD,
-                0.2);
+                0.25);
 
     rc_filter_first_order_lowpass(&ref_right_LPF,
                 MAIN_LOOP_PERIOD,
-                0.2);
+                0.25);
 
-    rc_filter_first_order_lowpass(&kd_left_LPF,
+    rc_filter_first_order_lowpass(&kd_LPF,
                 MAIN_LOOP_PERIOD,
-                0.1);
-    
-    rc_filter_first_order_lowpass(&kd_right_LPF,
-                MAIN_LOOP_PERIOD,
-                0.1);
+                0.25);
 
     // Example of setting limits to the output of the filter
     rc_filter_enable_saturation(&left_pid, -2, 2);
