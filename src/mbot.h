@@ -95,10 +95,8 @@ mbot_motor_command_t current_cmd = {0};
  * };
  */
 
-rc_filter_t left_p;
-rc_filter_t right_p;
-rc_filter_t left_d;
-rc_filter_t right_d;
+rc_filter_t left_pid;
+rc_filter_t right_pid;
 rc_filter_t fwd_vel_pid;
 rc_filter_t turn_vel_pid;
 
@@ -107,31 +105,19 @@ rc_filter_t ref_right_LPF;
 rc_filter_t kd_left_LPF;
 rc_filter_t kd_right_LPF;
 
-pid_parameters_t left_p_params = {
-    .kp = 4.3,
+pid_parameters_t left_pid_params = {
+    .kp = 4.0,
     .ki = 0.0,
-    .kd = 0.0,
+    .kd = 0.01,
     .dFilterHz = 25.0,
 };
-pid_parameters_t right_p_params = {
-    .kp = 4.3,
+pid_parameters_t right_pid_params = {
+    .kp = 4.0,
     .ki = 0.0,
-    .kd = 0.0,
+    .kd = 0.01,
     .dFilterHz = 25.0,
 };
 
-pid_parameters_t left_d_params = {
-    .kp = 0.0,
-    .ki = 0.0,
-    .kd = 0.01,
-    .dFilterHz = 25.0,
-};
-pid_parameters_t right_d_params = {
-    .kp = 0.0,
-    .ki = 0.0,
-    .kd = 0.01,
-    .dFilterHz = 25.0,
-};
 pid_parameters_t fwd_vel_pid_params = {
     .kp = 1.0,
     .ki = 0.0,
