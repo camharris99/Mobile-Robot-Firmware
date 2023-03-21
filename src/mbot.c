@@ -371,7 +371,7 @@ int main()
     mpu_config.i2c_bus = i2c;
     mpu_config.dmp_fetch_accel_gyro = 1;
     mpu_config.enable_magnetometer = 1;
-    mpu_config.read_mag_after_callback = 0;
+    mpu_config.read_mag_after_callback = 1;
     mpu_config.orient = ORIENTATION_Z_UP;
     mpu_config.dmp_sample_rate = 200;
     
@@ -440,11 +440,11 @@ int main()
 
     rc_filter_first_order_lowpass(&ref_left_LPF,
                 MAIN_LOOP_PERIOD,
-                0.25);
+                0.2);
 
     rc_filter_first_order_lowpass(&ref_right_LPF,
                 MAIN_LOOP_PERIOD,
-                0.25);
+                0.2);
 
     rc_filter_first_order_lowpass(&kd_LPF,
                 MAIN_LOOP_PERIOD,
@@ -466,11 +466,13 @@ int main()
     {
         printf("Running in closed loop mode\n");
     }
-
-    while (running)
-    {
-        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |\         \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY  |  R DUTY  | \         \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print);
+    printf("odom.x\todom.y\n");
+    while (running){
+        printf("%f\t%f\n", current_odom.x,current_odom.y);
+        sleep_ms(500);
+        // printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |       ERROR       |    GYRO    |\         \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY |  R DUTY | L ERROR  |  R ERROR  |   GYRO    |\         \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print, 0,0, mpu_data.gyro[2]);    
     }
+
 }
 
 /**

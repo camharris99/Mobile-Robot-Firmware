@@ -108,13 +108,13 @@ rc_filter_t kd_LPF;
 pid_parameters_t left_pid_params = {
     .kp = 4.0,
     .ki = 0.0,
-    .kd = 0.01,
+    .kd = 0.0001,
     .dFilterHz = 25.0,
 };
 pid_parameters_t right_pid_params = {
     .kp = 4.0,
     .ki = 0.0,
-    .kd = 0.01,
+    .kd = 0.0001,
     .dFilterHz = 25.0,
 };
 
