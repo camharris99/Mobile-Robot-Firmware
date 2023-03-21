@@ -31,7 +31,6 @@ uint64_t timestamp_offset = 0;
 uint64_t current_pico_time = 0;
 
 float enc2meters = ((2.0 * PI * WHEEL_RADIUS) / (GEAR_RATIO * ENCODER_RES));
-float deg2rad = PI/180;
 
 float l_duty_to_print = 0.0;
 float r_duty_to_print = 0.0;
@@ -182,7 +181,12 @@ bool timer_cb(repeating_timer_t *rt)
         current_encoders.leftticks = enc_cnt_l;
 
         // get gyro data
-        // rc_mpu_data_t mpu_data;
+        rc_mpu_data_t mpu_data;
+        rc_mpu_read_gyro(&mpu_data);
+        rc_mpu_read_accel(&mpu_data);
+
+        float gyro_heading = mpu_data.gyro[2];
+        gyro_to_print = gyro_heading;
 
         // compute new odometry
         /*************************************************************
@@ -199,20 +203,10 @@ bool timer_cb(repeating_timer_t *rt)
          * End of TODO
          *************************************************************/
 
-        float delta_d, delta_theta, delta_x, delta_y, gyro_z, delta_gyro_z, gyro_err, gyro_thresh; // displacement in meters and rotation in radians
-        gyro_thresh = 0.05;
-
+        float delta_d, delta_theta, delta_x, delta_y; // displacement in meters and rotation in radians
+    
         delta_theta = (current_encoders.right_delta - current_encoders.left_delta)*enc2meters/WHEEL_BASE;
         delta_d = (current_encoders.right_delta + current_encoders.left_delta)*enc2meters/2.0;
-
-        rc_mpu_read_gyro(&mpu_data);
-        rc_mpu_read_accel(&mpu_data);
-
-        gyro_z = rc_filter_march(&gyro_integrator, mpu_data.gyro[2]*deg2rad);
-        delta_gyro_z = mpu_data.gyro[2]*deg2rad;
-        gyro_to_print = clamp_theta(gyro_z);
-
-        gyro_err = gyro_z - current_odom.theta;
 
         delta_x = delta_d*cos(current_odom.theta + delta_theta/2.0);
         delta_y = delta_d*sin(current_odom.theta + delta_theta/2.0);
@@ -220,14 +214,7 @@ bool timer_cb(repeating_timer_t *rt)
         current_odom.utime = cur_pico_time;
         current_odom.x = current_odom.x + delta_x;
         current_odom.y = current_odom.y + delta_y;
-
-        if (fabs(gyro_err) > gyro_thresh) {
-            current_odom.theta = clamp_theta(gyro_z);
-        } else {
-            current_odom.theta = clamp_theta(current_odom.theta + delta_theta);
-        }
-
-        // current_odom.theta = clamp_theta(current_odom.theta + delta_theta);
+        current_odom.theta = clamp_theta(current_odom.theta + delta_theta);
 
         // get the current motor command state (if we have one)
         if (comms_get_topic_data(MBOT_MOTOR_COMMAND, &current_cmd))
@@ -480,11 +467,6 @@ int main()
     right_lpf = rc_filter_empty();
     rc_filter_first_order_lowpass(&right_lpf, MAIN_LOOP_PERIOD, 0.1);
 
-    gyro_integrator = rc_filter_empty();
-    rc_filter_integrator(&gyro_integrator, MAIN_LOOP_PERIOD);
-
-    rc_filter_pid(&left_pid, left_pid_params.kp, left_pid_params.ki, left_pid_params.kd, 1.0/left_pid_params.dFilterHz, MAIN_LOOP_PERIOD);
-
     rc_filter_enable_saturation(&left_pid, -1.0, 1.0);
     rc_filter_enable_saturation(&right_pid, -1.0, 1.0);
 
@@ -497,19 +479,11 @@ int main()
         printf("Running in closed loop mode\n");
     }
 
-    int print_state = 1;
-
     while (running)
     {
-        if (print_state == 0) {
-            printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |       ERROR       |    GYRO    |\
-            \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY |  R DUTY | L ERROR  |  R ERROR  |   GYRO    |\
-            \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print, err_l_to_print, err_r_to_print, gyro_to_print);
-        } else {
-            printf("%7.3f,  %7.3f\n", current_odom.x, current_odom.y);
-            sleep_ms(200);
-        }
-        
+        printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |       ERROR       |    GYRO    |\
+        \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY |  R DUTY | L ERROR  |  R ERROR  |   GYRO    |\
+        \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print, err_l_to_print, err_r_to_print, gyro_to_print);
     }
 }
 

@@ -96,6 +96,7 @@ rc_filter_t fwd_vel_pid;
 rc_filter_t turn_vel_pid;
 rc_filter_t left_lpf;
 rc_filter_t right_lpf;
+rc_filter_t gyro_integrator;
 
 pid_parameters_t left_pid_params = {
     .kp = 2.3,
