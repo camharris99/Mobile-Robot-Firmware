@@ -200,7 +200,7 @@ bool timer_cb(repeating_timer_t *rt)
          *************************************************************/
 
         float delta_d, delta_theta, delta_x, delta_y, gyro_z, delta_gyro_z, gyro_err, gyro_thresh; // displacement in meters and rotation in radians
-        gyro_thresh = 0.05;
+        gyro_thresh = 0.005;
 
         delta_theta = (current_encoders.right_delta - current_encoders.left_delta)*enc2meters/WHEEL_BASE;
         delta_d = (current_encoders.right_delta + current_encoders.left_delta)*enc2meters/2.0;
@@ -208,11 +208,16 @@ bool timer_cb(repeating_timer_t *rt)
         rc_mpu_read_gyro(&mpu_data);
         rc_mpu_read_accel(&mpu_data);
 
-        gyro_z = rc_filter_march(&gyro_integrator, mpu_data.gyro[2]*deg2rad);
-        delta_gyro_z = mpu_data.gyro[2]*deg2rad;
-        gyro_to_print = clamp_theta(gyro_z);
+        // gyro_z = rc_filter_march(&gyro_integrator, mpu_data.gyro[2]*deg2rad);
+        gyro_z = mpu_data.fused_TaitBryan[2];
+        delta_gyro_z = mpu_data.gyro[2]*MAIN_LOOP_PERIOD*deg2rad;
+        gyro_to_print = delta_gyro_z;
 
-        gyro_err = gyro_z - (current_odom.theta + delta_theta);
+        gyro_err = delta_gyro_z - delta_theta;
+
+        if (fabs(gyro_err) > gyro_thresh) {
+            delta_theta = delta_gyro_z;
+        }
 
         delta_x = delta_d*cos(current_odom.theta + delta_theta/2.0);
         delta_y = delta_d*sin(current_odom.theta + delta_theta/2.0);
@@ -221,11 +226,7 @@ bool timer_cb(repeating_timer_t *rt)
         current_odom.x = current_odom.x + delta_x;
         current_odom.y = current_odom.y + delta_y;
 
-        if (fabs(gyro_err) > gyro_thresh) {
-            current_odom.theta = clamp_theta(gyro_z);
-        } else {
-            current_odom.theta = clamp_theta(current_odom.theta + delta_theta);
-        }
+        current_odom.theta = clamp_theta(current_odom.theta + delta_theta);
 
         // current_odom.theta = clamp_theta(current_odom.theta + delta_theta);
 
@@ -475,10 +476,10 @@ int main()
     rc_filter_pid(&right_pid, right_pid_params.kp, right_pid_params.ki, right_pid_params.kd, 1.0/right_pid_params.dFilterHz, MAIN_LOOP_PERIOD);
 
     left_lpf = rc_filter_empty();
-    rc_filter_first_order_lowpass(&left_lpf, MAIN_LOOP_PERIOD, 0.2);
+    rc_filter_first_order_lowpass(&left_lpf, MAIN_LOOP_PERIOD, 0.17);
 
     right_lpf = rc_filter_empty();
-    rc_filter_first_order_lowpass(&right_lpf, MAIN_LOOP_PERIOD, 0.2);
+    rc_filter_first_order_lowpass(&right_lpf, MAIN_LOOP_PERIOD, 0.17);
 
     gyro_integrator = rc_filter_empty();
     rc_filter_integrator(&gyro_integrator, MAIN_LOOP_PERIOD);
@@ -497,7 +498,7 @@ int main()
         printf("Running in closed loop mode\n");
     }
 
-    int print_state = 1;
+    int print_state = 0;
 
     while (running)
     {
@@ -509,7 +510,6 @@ int main()
             printf("%7.3f,  %7.3f\n", current_odom.x, current_odom.y);
             sleep_ms(200);
         }
-        
     }
 }
 
@@ -534,6 +534,10 @@ float clamp_duty(float duty)
 float clamp_theta(float theta) {
     while (theta > 2.0*PI) {
         theta -= 2.0*PI;
+    }
+
+    while (theta < 0.0) {
+        theta += 2*PI;
     }
     return theta;
 }
