@@ -99,7 +99,7 @@ rc_filter_t right_lpf;
 rc_filter_t gyro_integrator;
 
 pid_parameters_t left_pid_params = {
-    .kp = 2.3,
+    .kp = 2.4,
     .ki = 0.0,
     .kd = 0.0,
     .dFilterHz = 25.0,

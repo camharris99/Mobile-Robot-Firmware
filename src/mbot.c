@@ -212,7 +212,7 @@ bool timer_cb(repeating_timer_t *rt)
         delta_gyro_z = mpu_data.gyro[2]*deg2rad;
         gyro_to_print = clamp_theta(gyro_z);
 
-        gyro_err = gyro_z - current_odom.theta;
+        gyro_err = gyro_z - (current_odom.theta + delta_theta);
 
         delta_x = delta_d*cos(current_odom.theta + delta_theta/2.0);
         delta_y = delta_d*sin(current_odom.theta + delta_theta/2.0);
@@ -475,10 +475,10 @@ int main()
     rc_filter_pid(&right_pid, right_pid_params.kp, right_pid_params.ki, right_pid_params.kd, 1.0/right_pid_params.dFilterHz, MAIN_LOOP_PERIOD);
 
     left_lpf = rc_filter_empty();
-    rc_filter_first_order_lowpass(&left_lpf, MAIN_LOOP_PERIOD, 0.1);
+    rc_filter_first_order_lowpass(&left_lpf, MAIN_LOOP_PERIOD, 0.2);
 
     right_lpf = rc_filter_empty();
-    rc_filter_first_order_lowpass(&right_lpf, MAIN_LOOP_PERIOD, 0.1);
+    rc_filter_first_order_lowpass(&right_lpf, MAIN_LOOP_PERIOD, 0.2);
 
     gyro_integrator = rc_filter_empty();
     rc_filter_integrator(&gyro_integrator, MAIN_LOOP_PERIOD);
