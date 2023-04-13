@@ -33,6 +33,9 @@ uint64_t current_pico_time = 0;
 float l_duty_to_print = 0;
 float r_duty_to_print = 0;
 
+float measured_vel_fwd = 0;
+float measured_vel_turn = 0;
+
 float enc2meters = ((2.0 * PI * WHEEL_RADIUS) / (GEAR_RATIO * ENCODER_RES));
 
 void timestamp_cb(timestamp_t *received_timestamp)
@@ -258,7 +261,7 @@ bool timer_cb(repeating_timer_t *rt)
                  *
                  ************************************************************/
                 float fwd_sp, turn_sp;                     // forward and turn setpoints in m/s and rad/s
-                float measured_vel_fwd, measured_vel_turn; // measured forward and turn velocities in m/s and rad/s
+                //float measured_vel_fwd, measured_vel_turn; // measured forward and turn velocities in m/s and rad/s
 
                 fwd_sp = current_cmd.trans_v;
                 turn_sp = current_cmd.angular_v;
@@ -272,6 +275,9 @@ bool timer_cb(repeating_timer_t *rt)
                 // Compute the measured velocities in m/s
                 measured_vel_l = enc_delta_l*enc2meters/dt;
                 measured_vel_r = enc_delta_r*enc2meters/dt;
+
+                measured_vel_fwd = (measured_vel_l + measured_vel_r)/2.0;
+                measured_vel_turn = (measured_vel_r - measured_vel_l)/WHEEL_BASE;
 
                 float error_l, error_r;   
                 error_l = left_sp - measured_vel_l;
@@ -468,7 +474,7 @@ int main()
     }
     printf("odom.x\todom.y\n");
     while (running){
-        printf("%f\t%f\n", current_odom.x,current_odom.y);
+        printf("%f\t%f\t%f\t%f\n", current_odom.x,current_odom.y,measured_vel_fwd,measured_vel_turn);
         sleep_ms(500);
         // printf("\033[2A\r|      SENSORS      |           ODOMETRY          |     SETPOINTS     |     DUTY     |       ERROR       |    GYRO    |\         \n\r|  L_ENC  |  R_ENC  |    X    |    Y    |    θ    |   FWD   |   ANG   | L DUTY |  R DUTY | L ERROR  |  R ERROR  |   GYRO    |\         \n\r|%7lld  |%7lld  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |%7.3f  |", current_encoders.leftticks, current_encoders.rightticks, current_odom.x, current_odom.y, current_odom.theta, current_cmd.trans_v, current_cmd.angular_v, l_duty_to_print, r_duty_to_print, 0,0, mpu_data.gyro[2]);    
     }
