@@ -194,6 +194,7 @@ bool timer_cb(repeating_timer_t *rt)
         delta_x = delta_d*cos(current_odom.theta + delta_theta/2.0);
         delta_y = delta_d*sin(current_odom.theta + delta_theta/2.0);
 
+        current_odom.utime = cur_pico_time;
         current_odom.x = current_odom.x + delta_x;
         current_odom.y = current_odom.y + delta_y;
         current_odom.theta = clamp_angle(current_odom.theta + delta_theta);
