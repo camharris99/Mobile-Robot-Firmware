@@ -5,6 +5,7 @@
 
 #define LEFT_MOTOR_CHANNEL      1
 #define RIGHT_MOTOR_CHANNEL     3
+
 #define WHEEL_RADIUS            26/PI/200
 #define WHEEL_BASE              0.16
 

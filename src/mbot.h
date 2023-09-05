@@ -35,10 +35,15 @@
 
 // TODO: Populate with calibration data (recommended to generate these for reverse direction as well)
 #define RPM_TO_M_S (WHEEL_RADIUS*2.0*PI/60.0)
-#define SLOPE_L 0.00567/RPM_TO_M_S
-#define SLOPE_R 0.00564/RPM_TO_M_S
-#define INTERCEPT_L 0.0765
-#define INTERCEPT_R 0.0775
+#define SLOPE_L -0.006394/RPM_TO_M_S
+#define SLOPE_R 0.006616/RPM_TO_M_S
+#define INTERCEPT_L 0.098351
+#define INTERCEPT_R 0.103696
+
+#define SLOPE_L_REV 0.0039252/RPM_TO_M_S
+#define SLOPE_R_REV 0.0038660/RPM_TO_M_S
+#define INTERCEPT_L_REV 0.1015808
+#define INTERCEPT_R_REV 0.1024206
 
 // TODO: Decide which controller is used, open loop = 1, PID = 0
 #define OPEN_LOOP 0
@@ -101,13 +106,13 @@ rc_filter_t gyro_integrator;
 pid_parameters_t left_pid_params = {
     .kp = 2.4,
     .ki = 0.0,
-    .kd = 0.0,
+    .kd = 0.0008,
     .dFilterHz = 25.0,
 };
 pid_parameters_t right_pid_params = {
     .kp = 2.3,
     .ki = 0.0,
-    .kd = 0.0,
+    .kd = 0.0008,
     .dFilterHz = 25.0,
 };
 pid_parameters_t fwd_vel_pid_params = {
@@ -124,7 +129,7 @@ pid_parameters_t turn_vel_pid_params = {
 };
 
 float clamp_duty(float duty);
-float clamp_theta(float theta);
+float clamp_angle(float angle);
 float signof(float val);
 
 #endif
