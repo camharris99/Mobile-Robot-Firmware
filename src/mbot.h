@@ -30,7 +30,7 @@
 // TODO: Enter the polarity values for your motors and encoders
 #define LEFT_ENC_POL 1.0
 #define RIGHT_ENC_POL -1.0
-#define LEFT_MOTOR_POL 1.0
+#define LEFT_MOTOR_POL -1.0
 #define RIGHT_MOTOR_POL 1.0
 
 // TODO: Populate with calibration data (recommended to generate these for reverse direction as well)
@@ -99,21 +99,24 @@ rc_filter_t left_pid;
 rc_filter_t right_pid;
 rc_filter_t fwd_vel_pid;
 rc_filter_t turn_vel_pid;
+rc_filter_t left_lpf;
+rc_filter_t right_lpf;
+rc_filter_t gyro_integrator;
 
 pid_parameters_t left_pid_params = {
-    .kp = 4.0,
+    .kp = 2.4,
     .ki = 0.0,
     .kd = 0.0008,
     .dFilterHz = 25.0,
 };
 pid_parameters_t right_pid_params = {
-    .kp = 4.0,
+    .kp = 2.3,
     .ki = 0.0,
     .kd = 0.0008,
     .dFilterHz = 25.0,
 };
 pid_parameters_t fwd_vel_pid_params = {
-    .kp = 1.0,
+    .kp = 0.5,
     .ki = 0.0,
     .kd = 0.0,
     .dFilterHz = 10.0,
